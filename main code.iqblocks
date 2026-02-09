@@ -1,0 +1,127 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <math.h>
+#include <string.h>
+
+#include "vex.h"
+
+using namespace vex;
+
+brain Brain;
+
+#define waitUntil(condition) \
+  do {                       \
+    wait(5, msec);           \
+  } while (!(condition))
+
+#define repeat(iterations) \
+  for (int iterator = 0; iterator < iterations; iterator++)
+
+controller Controller = controller();
+motor LeftDriveSmart = motor(PORT11, 1, false);
+motor RightDriveSmart = motor(PORT7, 1, true);
+gyro DrivetrainGyro = gyro(PORT8, true);
+smartdrive Drivetrain = smartdrive(LeftDriveSmart, RightDriveSmart, DrivetrainGyro, 200);
+
+void initializeRandomSeed(){
+  wait(100,msec);
+  double BrainTime = Brain.Timer.system() * 1000;
+  double BrainVoltage = Brain.Battery.voltage();
+  int seed = int(BrainTime + BrainVoltage);
+  srand(seed); 
+}
+
+bool vexcode_initial_drivetrain_calibration_completed = false;
+
+void calibrateDrivetrain() {
+  wait(200, msec);
+  Brain.Screen.print("Calibrating");
+  Brain.Screen.newLine();
+  Brain.Screen.print("Gyro");
+  DrivetrainGyro.calibrate();
+  while (DrivetrainGyro.isCalibrating()) {
+    wait(25, msec);
+  }
+  vexcode_initial_drivetrain_calibration_completed = true;
+  Brain.Screen.clearScreen();
+  Brain.Screen.setCursor(1, 1);
+}
+
+void vexcodeInit() {
+  calibrateDrivetrain();
+  initializeRandomSeed(); 
+}
+
+bool RemoteControlCodeEnabled = true;
+
+#include "vex.h"
+using namespace vex;
+
+motor LeftMotor(PORT7, true);
+motor RightMotor(PORT11, false);
+motor AuxMotor(PORT8);
+motor Port1Motor(PORT1, false);
+
+void controlAuxMotor() {
+  int speed = 33;
+
+  if (Controller.ButtonRUp.pressing()) {
+    AuxMotor.spin(fwd, speed, percent);
+  }
+  else if (Controller.ButtonLUp.pressing()) {
+    AuxMotor.spin(reverse, speed, percent);
+  }
+  else {
+    AuxMotor.stop(brakeType::hold);
+  }
+}
+
+void controlPort1Motor() {
+  int speed = 75;
+
+  if (Controller.ButtonRDown.pressing()) {
+    Port1Motor.spin(fwd, speed, percent);
+  }
+  else if (Controller.ButtonLDown.pressing()) {
+    Port1Motor.spin(reverse, speed, percent);
+  }
+  else {
+    Port1Motor.stop(brakeType::hold);
+  }
+}
+
+int main() {
+
+  LeftMotor.setStopping(brakeType::brake);
+  RightMotor.setStopping(brakeType::brake);
+  AuxMotor.setStopping(brakeType::hold);
+  Port1Motor.setStopping(brakeType::hold);
+
+  while (true) {
+
+    int forward = Controller.AxisA.position(percent);
+    int turn    = Controller.AxisD.position(percent);
+
+    int maxPower = 70;
+    if (Controller.ButtonRDown.pressing()) {
+      maxPower = 100;
+    }
+
+    int leftPower  = forward + turn;
+    int rightPower = forward - turn;
+
+    if (leftPower >  maxPower) leftPower =  maxPower;
+    if (leftPower < -maxPower) leftPower = -maxPower;
+    if (rightPower >  maxPower) rightPower =  maxPower;
+    if (rightPower < -maxPower) rightPower = -maxPower;
+
+    LeftMotor.spin(fwd, leftPower, percent);
+    RightMotor.spin(fwd, rightPower, percent);
+
+    controlAuxMotor();
+    controlPort1Motor();
+
+    wait(20, msec);
+  }
+}
